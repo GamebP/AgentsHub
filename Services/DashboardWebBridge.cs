@@ -550,6 +550,7 @@ public sealed partial class DashboardWebBridge : IDisposable
     {
         string? requestId = null;
         string action = string.Empty;
+
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
@@ -562,8 +563,8 @@ public sealed partial class DashboardWebBridge : IDisposable
         }
         catch (Exception ex)
         {
-            // The failure must carry the caller's requestId: an uncorrelatable reply is dropped by
-            // the web side and every thrown action degrades into a 25 second timeout there.
+            // Answer under the caller's request id. Answering with none left its promise pending, so
+            // any failing action surfaced as a 25 second timeout instead of the actual reason.
             SendResponse(requestId, false, $"{action}: {ex.Message}");
         }
     }
@@ -1181,7 +1182,9 @@ public sealed partial class DashboardWebBridge : IDisposable
             case "deepseek_remove_account":
                 {
                     string id = data.TryGetProperty("id", out var idElem2) ? idElem2.GetString() ?? string.Empty : string.Empty;
-                    bool removed = await Services.DeepSeek.DeepSeekEngine.Instance.RemoveAccountAsync(id).ConfigureAwait(false);
+                    bool removed = await Services.DeepSeek.DeepSeekEngine.Instance
+                        .RemoveAccountAsync(id)
+                        .ConfigureAwait(false);
                     SendResponse(requestId, true, new { removed });
                 }
                 break;
