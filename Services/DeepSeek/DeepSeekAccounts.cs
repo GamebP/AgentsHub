@@ -21,7 +21,7 @@ internal static class DeepSeekAccounts
 
     private static readonly string RegistryPath = Path.Combine(Root, "deepseek-accounts.json");
 
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static List<DeepSeekAccount>? _accounts;
     private static string _active = "default";
 
@@ -84,7 +84,7 @@ internal static class DeepSeekAccounts
             string dir = ProfileDir(id);
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // A locked profile survives; the account is gone from the picker either way.
         }

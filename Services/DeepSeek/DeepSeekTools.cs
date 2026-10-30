@@ -484,9 +484,9 @@ internal static class DeepSeekTools
 
         var arguments = args.TryGetProperty("args", out var inner) && inner.ValueKind == JsonValueKind.Object
             ? System.Text.Json.Nodes.JsonNode.Parse(inner.GetRawText()) as System.Text.Json.Nodes.JsonObject
-            : new System.Text.Json.Nodes.JsonObject();
+            : [];
 
-        string output = McpRegistry.Call(server, tool, arguments ?? new System.Text.Json.Nodes.JsonObject());
+        string output = McpRegistry.Call(server, tool, arguments ?? []);
         if (output.Length > MaxRead) output = output[..MaxRead] + "\n… output truncated …";
 
         return ($"{server}.{tool} -> {output.Length} chars", output);
@@ -536,7 +536,7 @@ internal static class DeepSeekTools
         if (lines.Count == 0) return "no textual change";
 
         bool capped = lines.Count > MaxLines;
-        if (capped) lines = lines.Take(MaxLines).ToList();
+        if (capped) lines = [.. lines.Take(MaxLines)];
         if (capped) lines.Add($"… diff truncated at {MaxLines} lines …");
 
         return string.Join('\n', lines);

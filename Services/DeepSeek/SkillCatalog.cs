@@ -36,7 +36,7 @@ internal static class SkillCatalog
             }
         }
 
-        return found.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        return [.. found.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>Reads the front matter for a name and description, falling back to the first heading.</summary>

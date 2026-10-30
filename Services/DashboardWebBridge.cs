@@ -552,19 +552,23 @@ public sealed partial class DashboardWebBridge : IDisposable
 
     public async Task HandleIncomingJsonAsync(string rawJson)
     {
+        string? requestId = null;
+        string action = string.Empty;
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
             var root = doc.RootElement;
 
-            var action = root.TryGetProperty("action", out var actElem) ? actElem.GetString() : string.Empty;
-            var requestId = root.TryGetProperty("requestId", out var reqElem) ? reqElem.GetString() : null;
+            action = root.TryGetProperty("action", out var actElem) ? actElem.GetString() ?? string.Empty : string.Empty;
+            requestId = root.TryGetProperty("requestId", out var reqElem) ? reqElem.GetString() : null;
 
             await HandleActionAsync(action, root, requestId);
         }
         catch (Exception ex)
         {
-            SendResponse(null, false, ex.Message);
+            // The failure must carry the caller's requestId: an uncorrelatable reply is dropped by
+            // the web side and every thrown action degrades into a 25 second timeout there.
+            SendResponse(requestId, false, $"{action}: {ex.Message}");
         }
     }
 
@@ -1172,12 +1176,7 @@ public sealed partial class DashboardWebBridge : IDisposable
             case "deepseek_remove_account":
                 {
                     string id = data.TryGetProperty("id", out var idElem2) ? idElem2.GetString() ?? string.Empty : string.Empty;
-                    bool removed = Services.DeepSeek.DeepSeekAccounts.Remove(id);
-                    if (removed)
-                    {
-                        await Services.DeepSeek.DeepSeekEngine.Instance
-                            .SwitchAccountAsync(Services.DeepSeek.DeepSeekAccounts.ActiveId).ConfigureAwait(false);
-                    }
+                    bool removed = await Services.DeepSeek.DeepSeekEngine.Instance.RemoveAccountAsync(id).ConfigureAwait(false);
                     SendResponse(requestId, true, new { removed });
                 }
                 break;
@@ -1272,7 +1271,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                         try
                         {
                             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                                "https://chat.deepseek.com/") { UseShellExecute = true });
+                                "https://chat.deepseek.com/")
+                            { UseShellExecute = true });
                             SendResponse(requestId, true, new { opened = true });
                         }
                         catch (Exception)
@@ -1290,7 +1290,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                         try
                         {
                             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                                $"https://chat.deepseek.com/a/chat/s/{chatId}") { UseShellExecute = true });
+                                $"https://chat.deepseek.com/a/chat/s/{chatId}")
+                            { UseShellExecute = true });
                         }
                         catch (Exception)
                         {
@@ -2221,7 +2222,7 @@ public sealed partial class DashboardWebBridge : IDisposable
                 {
                     string token = data.TryGetProperty("token", out var tProp) ? tProp.GetString() ?? "" : "";
                     string platform = data.TryGetProperty("platform", out var pProp) ? pProp.GetString() ?? "telegram" : "telegram";
-                    
+
                     var (success, username, error) = platform.Equals("discord", StringComparison.OrdinalIgnoreCase)
                         ? await PocketCommanderService.Instance.TestDiscordBotConnectionAsync(token).ConfigureAwait(false)
                         : await PocketCommanderService.Instance.TestTelegramBotConnectionAsync(token).ConfigureAwait(false);
@@ -2617,7 +2618,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                                 Process.Start(new ProcessStartInfo(
                                     Services.Platform.PlatformHelper.IsWindows ? "explorer.exe"
                                         : Services.Platform.PlatformHelper.IsMacOS ? "open" : "xdg-open",
-                                    $"\"{repoPath}\"") { UseShellExecute = true });
+                                    $"\"{repoPath}\"")
+                                { UseShellExecute = true });
                                 SendResponse(requestId, true, new { success = true, message = "Opened the folder" });
                             }
                             else if (target == "terminal")
@@ -3618,7 +3620,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                                 ? new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true }
                                 : new System.Diagnostics.ProcessStartInfo(
                                     Services.Platform.PlatformHelper.IsMacOS ? "open" : "xdg-open",
-                                    $"\"{path}\"") { UseShellExecute = true };
+                                    $"\"{path}\"")
+                                { UseShellExecute = true };
                             System.Diagnostics.Process.Start(info);
                         }
                         catch (Exception) { opened = false; }
@@ -3895,7 +3898,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
                                     Services.Platform.PlatformHelper.IsWindows ? "explorer.exe"
                                         : Services.Platform.PlatformHelper.IsMacOS ? "open" : "xdg-open",
-                                    $"\"{path}\"") { UseShellExecute = true });
+                                    $"\"{path}\"")
+                                { UseShellExecute = true });
                             }
                             catch (Exception) { opened = false; }
                         }
@@ -4508,7 +4512,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                             Process.Start(new ProcessStartInfo(
                                 Services.Platform.PlatformHelper.IsWindows ? "explorer.exe"
                                     : Services.Platform.PlatformHelper.IsMacOS ? "open" : "xdg-open",
-                                profileDir) { UseShellExecute = true });
+                                profileDir)
+                            { UseShellExecute = true });
                             SendResponse(requestId, true, null);
                         }
                         else
@@ -4528,7 +4533,8 @@ public sealed partial class DashboardWebBridge : IDisposable
                         Process.Start(new ProcessStartInfo(
                             Services.Platform.PlatformHelper.IsWindows ? "explorer.exe"
                                 : Services.Platform.PlatformHelper.IsMacOS ? "open" : "xdg-open",
-                            folderPath) { UseShellExecute = true });
+                            folderPath)
+                        { UseShellExecute = true });
                         SendResponse(requestId, true, null);
                     }
                     else

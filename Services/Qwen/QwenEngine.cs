@@ -409,7 +409,7 @@ public sealed class QwenEngine : IDisposable
             })()
             """).ConfigureAwait(true);
 
-        if (opened != "opened") return new List<string>();
+        if (opened != "opened") return [];
 
         await Task.Delay(700).ConfigureAwait(true);
 
@@ -427,14 +427,14 @@ public sealed class QwenEngine : IDisposable
 
         try
         {
-            var list = JsonSerializer.Deserialize<List<string>>(raw) ?? new List<string>();
+            var list = JsonSerializer.Deserialize<List<string>>(raw) ?? [];
             Log($"models -> {string.Join(", ", list)}");
             return list;
         }
         catch (JsonException)
         {
             Log($"models unreadable: {raw}");
-            return new List<string>();
+            return [];
         }
     });
 
@@ -604,7 +604,7 @@ public sealed class QwenEngine : IDisposable
 
             // Enumeration starts a process per server, so a broken one must cost its tools and
             // nothing else. Priming is never allowed to fail the turn.
-            IReadOnlyList<DeepSeek.McpToolInfo> mcpTools = Array.Empty<DeepSeek.McpToolInfo>();
+            IReadOnlyList<DeepSeek.McpToolInfo> mcpTools = [];
             try
             {
                 mcpTools = DeepSeek.McpRegistry.Tools();
@@ -687,31 +687,31 @@ public sealed class QwenEngine : IDisposable
 
                 Log($"tool {kind} -> {summary}");
 
-                    results.AppendLine($"[{kind}] {summary}");
-                    if (!string.IsNullOrWhiteSpace(body))
+                results.AppendLine($"[{kind}] {summary}");
+                if (!string.IsNullOrWhiteSpace(body))
+                {
+                    // Per result and per turn. Capping only the single result lets a dozen reads
+                    // fill the context between them, which is what triggers the compaction that
+                    // loses the guide in the first place.
+                    int room = Math.Max(0, ResultBudget - spent);
+                    int allow = Math.Min(PerResultLimit, room);
+
+                    if (allow <= 0)
                     {
-                        // Per result and per turn. Capping only the single result lets a dozen reads
-                        // fill the context between them, which is what triggers the compaction that
-                        // loses the guide in the first place.
-                        int room = Math.Max(0, ResultBudget - spent);
-                        int allow = Math.Min(PerResultLimit, room);
+                        results.AppendLine("[truncated: this turn's result budget is spent. Ask for a smaller range.]");
+                    }
+                    else
+                    {
+                        string clipped = body.Length > allow ? body[..allow] : body;
+                        results.AppendLine(clipped);
+                        spent += clipped.Length;
 
-                        if (allow <= 0)
+                        if (clipped.Length < body.Length)
                         {
-                            results.AppendLine("[truncated: this turn's result budget is spent. Ask for a smaller range.]");
-                        }
-                        else
-                        {
-                            string clipped = body.Length > allow ? body[..allow] : body;
-                            results.AppendLine(clipped);
-                            spent += clipped.Length;
-
-                            if (clipped.Length < body.Length)
-                            {
-                                results.AppendLine($"[truncated at {allow} of {body.Length} characters]");
-                            }
+                            results.AppendLine($"[truncated at {allow} of {body.Length} characters]");
                         }
                     }
+                }
             }
 
             message = $"Tool results:\n{results}\nContinue. Use another action if needed, otherwise answer.";

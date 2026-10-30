@@ -250,6 +250,27 @@ public sealed class DeepSeekEngine
         return true;
     });
 
+    /// <summary>
+    /// Removes an account. The browser process is released before the profile folder is deleted:
+    /// a live WebView2 keeps files like BrowserMetrics-*.pma open, and deleting under it fails
+    /// with access denied. The page then rebuilds on the surviving active account.
+    /// </summary>
+    public async Task<bool> RemoveAccountAsync(string id)
+    {
+        await UiAsync(() =>
+        {
+            _web?.Dispose();
+            _web = null;
+            _navigationStarted = false;
+            _primedChats.Clear();
+            return Task.FromResult(true);
+        }).ConfigureAwait(false);
+
+        bool removed = DeepSeekAccounts.Remove(id);
+        if (removed) await SwitchAccountAsync(DeepSeekAccounts.ActiveId).ConfigureAwait(false);
+        return removed;
+    }
+
     /// <summary>Signs out by deleting the profile, which is where the session actually lives.</summary>
     public Task SignOutAsync() => UiAsync(() =>
     {
@@ -419,7 +440,7 @@ public sealed class DeepSeekEngine
         // Checked against the chat itself, not a local set, so a restart does not re-prime a
         // conversation that already has it.
         bool needsPrime = toolsEnabled
-            && (chat is null || (!_primedChats.Contains(chat) && !await HasProtocolAsync(chat, ct).ConfigureAwait(false)));
+            && (chat is null || (!_primedChats.Contains(chat) && !await HasProtocolAsync(chat).ConfigureAwait(false)));
 
         if (needsPrime)
         {
@@ -428,7 +449,7 @@ public sealed class DeepSeekEngine
             // and never blocks the turn: an unreachable server simply contributes no tools.
             // A broken MCP setup must cost its tools and nothing else: priming is not allowed to
             // fail the turn, which is how one dead server took down every message.
-            IReadOnlyList<McpToolInfo> mcpTools = Array.Empty<McpToolInfo>();
+            IReadOnlyList<McpToolInfo> mcpTools = [];
             try
             {
                 mcpTools = McpRegistry.Tools();
@@ -645,7 +666,7 @@ public sealed class DeepSeekEngine
         string delta;
         if (full.Length > so_far.Length && full.StartsWith(so_far, StringComparison.Ordinal))
         {
-            delta = full.Substring(so_far.Length);
+            delta = full[so_far.Length..];
         }
         else if (full.Length > so_far.Length)
         {
@@ -700,7 +721,7 @@ public sealed class DeepSeekEngine
     });
 
     /// <summary>True when this chat already carries the protocol line.</summary>
-    private async Task<bool> HasProtocolAsync(string? chatId, CancellationToken ct)
+    private async Task<bool> HasProtocolAsync(string? chatId)
     {
         if (string.IsNullOrWhiteSpace(chatId)) return false;
 
@@ -938,7 +959,17 @@ public sealed class DeepSeekEngine
 
     private async Task EnsureWebViewAsync()
     {
-        if (_web == null) throw new InvalidOperationException("The DeepSeek window was disposed.");
+        // A disposed control is recoverable: SwitchAccountAsync and SignOutAsync dispose it on
+        // purpose and rely on this method to build a fresh one against the current profile.
+        // Only a missing host window means the engine was never initialized or is shut down.
+        if (_host == null || _shuttingDown)
+            throw new InvalidOperationException("The DeepSeek engine was not initialized on the UI thread.");
+
+        if (_web == null)
+        {
+            _web = new WebView2 { Dock = DockStyle.Fill };
+            _host.Controls.Add(_web);
+        }
 
         if (_web.CoreWebView2 == null)
         {

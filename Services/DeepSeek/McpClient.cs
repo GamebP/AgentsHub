@@ -27,7 +27,7 @@ internal sealed class McpSession : IDisposable
     private readonly Process _process;
     private readonly StreamWriter _stdin;
     private readonly StreamReader _stdout;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonNode?>> _pending = new();
     private readonly StringBuilder _stderrTail = new();
     private int _nextId;
@@ -171,13 +171,13 @@ internal sealed class McpSession : IDisposable
 
         if (result is null) throw new InvalidOperationException("the server did not answer initialize");
 
-        Notify("notifications/initialized", new JsonObject());
+        Notify("notifications/initialized", []);
     }
 
     public List<McpToolInfo> ListTools(string server, int budgetMs = 10_000)
     {
         var tools = new List<McpToolInfo>();
-        var result = Request("tools/list", new JsonObject(), budgetMs);
+        var result = Request("tools/list", [], budgetMs);
         if (result?["tools"] is not JsonArray array) return tools;
 
         foreach (var node in array)
@@ -310,7 +310,7 @@ internal static class McpRegistry
         Sessions[config.Name] = fresh;
         return fresh;
     }
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static IReadOnlyList<McpToolInfo>? _cachedTools;
     private static IReadOnlyList<McpServerConfig>? _cachedConfigs;
 
@@ -394,7 +394,7 @@ internal static class McpRegistry
                     }
 
                     if (string.IsNullOrWhiteSpace(command) && string.IsNullOrWhiteSpace(url)) continue;
-                    configs.Add(new McpServerConfig(entry.Name, command, args.ToArray(), env, url));
+                    configs.Add(new McpServerConfig(entry.Name, command, [.. args], env, url));
                 }
             }
             catch (Exception ex) when (ex is IOException or JsonException)

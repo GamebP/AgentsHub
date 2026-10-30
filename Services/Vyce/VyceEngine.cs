@@ -419,7 +419,7 @@ internal sealed class VyceEngine : IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            VyceModelList list = new(Array.Empty<VyceModel>(), string.Empty);
+            VyceModelList list = new([], string.Empty);
 
             for (int attempt = 1; attempt <= 2; attempt++)
             {

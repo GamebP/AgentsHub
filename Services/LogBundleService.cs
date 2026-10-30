@@ -78,7 +78,7 @@ internal static class LogBundleService
     {
         string temp = Path.GetTempPath();
         var logs = Directory.Exists(temp)
-            ? Directory.GetFiles(temp, "agentshub-*.log").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList()
+            ? [.. Directory.GetFiles(temp, "agentshub-*.log").OrderBy(f => f, StringComparer.OrdinalIgnoreCase)]
             : new List<string>();
 
         var bundle = new StringBuilder();
